@@ -31,6 +31,11 @@ function compileCore() {
         .bundle()
         .pipe(source(`${pkg.name}.js`))
         .pipe(buffer())
+        .pipe(
+            rename({
+                basename: "index"
+            })
+        )
         .pipe(gulp.dest("./"));
 }
 
@@ -57,7 +62,7 @@ function compileLab() {
 }
 
 function clean() {
-    return exec(`rm -f ./${pkg.name}.js`);
+    return exec(`rm -f ${pkg.main}`);
 }
 
 function serve() {
