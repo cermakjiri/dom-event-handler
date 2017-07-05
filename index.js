@@ -4,115 +4,102 @@
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
+const listeners = new Map();
+const symbols = new Map();
+
+/**
+ * @param  {Symbol} sym
+ * @return {Boolean}
+ */
+function detach(sym) {
+    const data = listeners.get(sym);
+
+    if (data === undefined) return false;
+
+    const { target, name, handler, capture } = data;
+
+    target.removeEventListener(name, handler, capture);
+
+    return listeners.delete(sym);
+}
+
+/**
+ * detach all event listeners
+ * @return {void}
+ */
+function destroy(symbols) {
+    for (const sym of symbols) {
+        detach(sym);
+    }
+
+    symbols.clear();
+}
+
 class DomEventHandler {
     constructor() {
-        this.id = 0;
-        this.listeners = new Map();
-        this.callbacks = new Map();
-    }
-
-    _createCallback(id, fn, onetime) {
-        if (onetime) {
-            this.callbacks.set(id, event => {
-                this.detach(id);
-
-                fn(event);
-            });
-        } else {
-            this.callbacks.set(id, fn);
-        }
-    }
-
-    /*
-        @param {HTMLElement} element
-        @param {String} event
-        @param {Function} fn
-        @param {Boolean} capture
-        @param {Boolean} onetime
-        @return {Number} id
-    */
-    _attach(element, eventName, callback, onetime, capture) {
-        const id = this.id;
-
-        this._createCallback(id, callback, onetime);
-
-        // save data
-        this.listeners.set(id, { element, eventName, onetime, capture });
-
-        // add event listener
-        element.addEventListener(eventName, this.callbacks.get(id), capture);
-
-        return this.id++;
+        symbols.set(this, new Set());
     }
 
     /**
      * attach new event handler
-     * @param  {HTMLElement or NodeList}   element   [description]
-     * @param  {String}   eventName [description]
-     * @param  {Function} callback  [description]
+     * @param  {HTMLElement} target event target
+     * @param  {String}   name event name
+     * @param  {Function} handler event handler
+     * @param  {Boolean}   capture
      * @param  {Boolean}   onetime   should auto. detach after execution
-     * @param  {Boolean}   capture   [description]
-     * @return {Number}             event handler id or array of ids
+     * @return {Symbol} event handler id or array of ids
      */
-    attach(element, eventName, callback, onetime, capture) {
-        if (!element.length) {
-            return this._attach(element, eventName, callback, onetime, capture);
+    attach(target, name, handler, capture = false, onetime = false) {
+        const sym = Symbol();
+        let eventHandler = handler;
+
+        if (onetime) {
+            eventHandler = event => {
+                this.detach(sym);
+
+                handler(event);
+            };
         }
 
-        const elements = [...element];
-        const id = [];
+        // set event listener
+        target.addEventListener(name, eventHandler, capture);
 
-        for (let el of elements) {
-            id.push(this._attach(el, eventName, callback, onetime, capture));
-        }
+        // save data
+        listeners.set(sym, {
+            handler: eventHandler,
+            target,
+            name,
+            capture
+        });
 
-        return id.length === 1 ? id[0] : id;
+        symbols.get(this).add(sym);
+
+        return sym;
     }
 
-    /*
-        @param {Number} id
-        @return {Boolean}
-    */
-    _detach(key, value) {
-        const data = value ? value : this.listeners.get(key);
-
-        if (data === undefined) return false;
-
-        const callback = this.callbacks.get(key);
-
-        this.callbacks.delete(key);
-
-        data.element.removeEventListener(data.eventName, callback, data.capture);
-
-        return this.listeners.delete(key);
-    }
-
-    detach(id) {
-        if (typeof id !== "number" && !Array.isArray(id)) {
-            throw "Argument must be number or array of numbers. An id/s of event listener/s returned by the attach method.";
+    /**
+     * detach event listener
+     * @param  {Symbol} sym
+     * @return {Boolean}
+     */
+    detach(sym) {
+        if (typeof sym !== "symbol") {
+            throw new TypeError(`First argument must be a symbol, not ${typeof sym}.`);
         }
 
-        const results = [];
+        symbols.get(this).delete(sym);
 
-        if (!id.length) id = [id];
-
-        for (let num of id) {
-            results.push(this._detach(num));
-        }
-
-        return results.length === 1 ? results[0] : results;
+        return detach(sym);
     }
 
     destroy() {
-        this.listeners.forEach((data, id) => {
-            this._detach(id, data);
-        });
+        destroy(symbols.get(this));
+    }
 
-        this.listeners.clear();
-
-        this.callbacks.clear();
-
-        this.id = 0;
+    static destroy() {
+        for (const [key, value] of symbols.entries()) {
+            destroy(value);
+        }
     }
 }
 exports.default = DomEventHandler;
