@@ -1,6 +1,6 @@
 {
     "name": "dom-event-handler",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "description": "Interface to handle DOM events. One-time event listener, easy way to remove listeners.",
     "main": "index.js",
     "private": true,
